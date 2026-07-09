@@ -1,0 +1,76 @@
+{
+  "name": "windows-troubleshooter",
+  "productName": "Windows Troubleshooter",
+  "version": "1.0.0",
+  "description": "AI-powered Windows desktop troubleshooting app: diagnose and fix system issues through a chat interface.",
+  "main": "dist/main/index.js",
+  "author": "trendlinepros-afk",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/trendlinepros-afk/Windows-Auto-Fix-Your-Computer-Issues.git"
+  },
+  "scripts": {
+    "build": "webpack --mode production",
+    "build:dev": "webpack --mode development",
+    "typecheck": "tsc --noEmit",
+    "start": "npm run build:dev && electron .",
+    "dist": "npm run build && electron-builder --win",
+    "clean": "rimraf dist release"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "css-loader": "^7.1.2",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "html-webpack-plugin": "^5.6.0",
+    "rimraf": "^6.0.1",
+    "style-loader": "^4.0.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.5.4",
+    "webpack": "^5.94.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "build": {
+    "appId": "com.trendlinepros.windowstroubleshooter",
+    "productName": "Windows Troubleshooter",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "public/icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "public/icon.png",
+        "to": "public/icon.png"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "public/icon.png",
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": true
+    },
+    "publish": {
+      "provider": "github"
+    }
+  }
+}
