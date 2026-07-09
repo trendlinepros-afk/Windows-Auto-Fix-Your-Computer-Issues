@@ -37,6 +37,13 @@ export interface DownloadResult {
   error?: string;
 }
 
+export interface GeminiModelsResult {
+  ok: boolean;
+  models?: string[];
+  recommended?: string | null;
+  error?: string;
+}
+
 const api = {
   app: {
     getInfo: (): Promise<AppInfo> => ipcRenderer.invoke('app:info'),
@@ -60,6 +67,11 @@ const api = {
       ipcRenderer.on('chat:stream', listener);
       return () => ipcRenderer.removeListener('chat:stream', listener);
     },
+  },
+
+  gemini: {
+    listModels: (): Promise<GeminiModelsResult> =>
+      ipcRenderer.invoke('gemini:listModels'),
   },
 
   fixes: {

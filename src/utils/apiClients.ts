@@ -48,12 +48,74 @@ Respond in two parts:
 Only include issues actually supported by the diagnostics. If everything looks
 healthy, say so and return an empty JSON array.`;
 
+interface GeminiModelInfo {
+  name: string;
+  supportedGenerationMethods?: string[];
+}
+
+/**
+ * Ask Google which Gemini models this API key can currently use for text
+ * generation. Google retires models frequently, so the app never trusts a
+ * hardcoded name — this list is the source of truth.
+ */
+export async function listGeminiModels(apiKey: string): Promise<string[]> {
+  const models: GeminiModelInfo[] = [];
+  let pageToken = '';
+  for (let page = 0; page < 5; page++) {
+    const url =
+      `${GEMINI_BASE}/models?pageSize=1000&key=${encodeURIComponent(apiKey)}` +
+      (pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : '');
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Could not list Gemini models (HTTP ${response.status})`);
+    }
+    const data = (await response.json()) as {
+      models?: GeminiModelInfo[];
+      nextPageToken?: string;
+    };
+    models.push(...(data.models || []));
+    if (!data.nextPageToken) break;
+    pageToken = data.nextPageToken;
+  }
+  return models
+    .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
+    .map((m) => m.name.replace(/^models\//, ''));
+}
+
+/**
+ * Pick the best general-purpose text model from a live model list: newest
+ * version first, "flash" preferred over "pro" (fast + cheap suits this app),
+ * stable preferred over preview/experimental, specialized models excluded.
+ */
+export function pickBestGeminiModel(models: string[]): string | null {
+  const score = (name: string): number => {
+    if (!name.startsWith('gemini')) return -1;
+    if (/(embedding|tts|image|audio|live|veo|imagen|aqa|robotics|computer-use)/.test(name)) {
+      return -1;
+    }
+    let s = 0;
+    const version = name.match(/gemini-(\d+(?:\.\d+)?)/);
+    s += version ? parseFloat(version[1]) * 100 : 0;
+    if (name.includes('flash')) s += 30;
+    if (name.includes('lite')) s -= 10;
+    if (/(preview|exp|thinking)/.test(name)) s -= 25;
+    if (name.endsWith('latest')) s += 5;
+    return s;
+  };
+  const ranked = [...new Set(models)]
+    .map((name) => ({ name, s: score(name) }))
+    .filter((m) => m.s >= 0)
+    .sort((a, b) => b.s - a.s);
+  return ranked[0]?.name ?? null;
+}
+
 export async function streamGeminiDiagnosis(
   settings: AppSettings,
   userMessage: string,
   diagnostics: DiagnosticResult[],
-  onChunk: (text: string) => void
-): Promise<{ fullText: string; issues: DiagnosedIssue[] }> {
+  onChunk: (text: string) => void,
+  onStatus?: (message: string) => void
+): Promise<{ fullText: string; issues: DiagnosedIssue[]; usedModel: string }> {
   if (!settings.geminiApiKey) {
     throw new Error(
       'Gemini API key is not configured. Add it in Settings before running a diagnosis.'
@@ -67,10 +129,6 @@ export async function streamGeminiDiagnosis(
         : `## ${d.category} (collected ${d.collectedAt})\n${d.data}`
     )
     .join('\n\n');
-
-  const url = `${GEMINI_BASE}/models/${encodeURIComponent(
-    settings.geminiModel
-  )}:streamGenerateContent?alt=sse&key=${encodeURIComponent(settings.geminiApiKey)}`;
 
   const body = {
     system_instruction: { parts: [{ text: DIAGNOSIS_SYSTEM_PROMPT }] },
@@ -87,18 +145,47 @@ export async function streamGeminiDiagnosis(
     generationConfig: { temperature: 0.3, maxOutputTokens: 4096 },
   };
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-
-  if (response.status === 404) {
-    throw new Error(
-      `The Gemini model "${settings.geminiModel}" was not found — it may have been retired by Google. ` +
-        `Open Settings and update the Gemini model to a current one (e.g. "gemini-2.5-flash").`
+  const request = (model: string) =>
+    fetch(
+      `${GEMINI_BASE}/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(settings.geminiApiKey)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }
     );
+
+  let usedModel = settings.geminiModel;
+  let response = await request(usedModel);
+
+  // Self-heal when Google retires the configured model: fetch the live model
+  // list, switch to the best available one, and retry once.
+  if (response.status === 404) {
+    onStatus?.(
+      `The Gemini model "${usedModel}" is no longer available — checking Google for current models…`
+    );
+    let available: string[];
+    try {
+      available = await listGeminiModels(settings.geminiApiKey);
+    } catch (err) {
+      throw new Error(
+        `The Gemini model "${usedModel}" was not found, and auto-detecting a replacement failed ` +
+          `(${err instanceof Error ? err.message : String(err)}). ` +
+          `Open Settings and use "Detect available models" to pick a current one.`
+      );
+    }
+    const best = pickBestGeminiModel(available);
+    if (!best) {
+      throw new Error(
+        `The Gemini model "${usedModel}" was not found and no usable replacement was detected. ` +
+          `Models your key can access: ${available.slice(0, 8).join(', ') || '(none)'}`
+      );
+    }
+    onStatus?.(`Switching to "${best}" and saving it to Settings…`);
+    usedModel = best;
+    response = await request(usedModel);
   }
+
   if (!response.ok || !response.body) {
     const detail = await response.text().catch(() => '');
     throw new Error(`Gemini API error (${response.status}): ${detail.slice(0, 300)}`);
@@ -138,7 +225,7 @@ export async function streamGeminiDiagnosis(
     }
   }
 
-  return { fullText, issues: parseIssuesFromText(fullText) };
+  return { fullText, issues: parseIssuesFromText(fullText), usedModel };
 }
 
 export function parseIssuesFromText(text: string): DiagnosedIssue[] {

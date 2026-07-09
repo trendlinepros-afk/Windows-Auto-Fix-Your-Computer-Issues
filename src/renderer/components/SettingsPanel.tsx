@@ -22,6 +22,9 @@ export default function SettingsPanel({ settings, onSaved }: Props): JSX.Element
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [downloadNotice, setDownloadNotice] = useState('');
+  const [geminiModels, setGeminiModels] = useState<string[]>([]);
+  const [detectingModels, setDetectingModels] = useState(false);
+  const [modelNotice, setModelNotice] = useState('');
 
   const set = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     setDraft((d) => ({ ...d, [key]: value }));
@@ -44,6 +47,31 @@ export default function SettingsPanel({ settings, onSaved }: Props): JSX.Element
       setSavedNotice(true);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const detectGeminiModels = async () => {
+    setDetectingModels(true);
+    setModelNotice('');
+    try {
+      const result = await window.api.gemini.listModels();
+      if (!result.ok) {
+        setModelNotice(`Detection failed: ${result.error}`);
+        return;
+      }
+      setGeminiModels(result.models || []);
+      if (result.recommended) {
+        set('geminiModel', result.recommended);
+        setModelNotice(
+          `Found ${result.models?.length ?? 0} models — recommended "${result.recommended}" applied. Save Settings to keep it.`
+        );
+      } else {
+        setModelNotice(
+          `Found ${result.models?.length ?? 0} models. Pick one from the field's dropdown.`
+        );
+      }
+    } finally {
+      setDetectingModels(false);
     }
   };
 
@@ -121,11 +149,27 @@ export default function SettingsPanel({ settings, onSaved }: Props): JSX.Element
         <div className="field-grid">
           <label className="field">
             Gemini model
-            <input
-              type="text"
-              value={draft.geminiModel}
-              onChange={(e) => set('geminiModel', e.target.value)}
-            />
+            <div className="key-row">
+              <input
+                type="text"
+                list="gemini-model-options"
+                value={draft.geminiModel}
+                onChange={(e) => set('geminiModel', e.target.value)}
+              />
+              <button
+                className="btn ghost sm"
+                onClick={detectGeminiModels}
+                disabled={detectingModels}
+                title="Ask Google which models your API key can use right now"
+              >
+                {detectingModels ? 'Detecting…' : '🔍 Detect'}
+              </button>
+            </div>
+            <datalist id="gemini-model-options">
+              {geminiModels.map((model) => (
+                <option key={model} value={model} />
+              ))}
+            </datalist>
           </label>
           <label className="field">
             DeepSeek model
@@ -136,6 +180,11 @@ export default function SettingsPanel({ settings, onSaved }: Props): JSX.Element
             />
           </label>
         </div>
+        {modelNotice && <p className="muted update-notice">{modelNotice}</p>}
+        <p className="muted">
+          If Google retires the configured model, the app now detects a current
+          replacement automatically during the next diagnosis and saves it here.
+        </p>
       </section>
 
       <section className="settings-section">
