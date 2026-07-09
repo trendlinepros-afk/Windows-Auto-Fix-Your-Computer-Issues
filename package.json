@@ -48,6 +48,12 @@
       "public/icon.png",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "public/icon.png",
+        "to": "public/icon.png"
+      }
+    ],
     "win": {
       "target": [
         {
