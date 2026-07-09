@@ -14,6 +14,7 @@ import * as path from 'path';
 import {
   AppSettings,
   ChatStreamEvent,
+  DIAGNOSTIC_CATEGORY_LABELS,
   DiagnosticCategory,
   Fix,
   FixExecutionRequest,
@@ -252,8 +253,11 @@ function registerIpcHandlers(): void {
               : 'No diagnostic categories enabled — analyzing description only…',
         });
 
-        const diagnostics = await collectDiagnostics(optedIn, (category) => {
-          sendChatEvent({ type: 'status', message: `Collecting: ${category}…` });
+        const diagnostics = await collectDiagnostics(optedIn, (category, detail) => {
+          sendChatEvent({
+            type: 'status',
+            message: `${DIAGNOSTIC_CATEGORY_LABELS[category]} — ${detail}`,
+          });
         });
 
         sendChatEvent({ type: 'status', message: 'Analyzing with AI…' });

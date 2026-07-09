@@ -124,7 +124,7 @@ export interface AppSettings {
 export const DEFAULT_SETTINGS: AppSettings = {
   geminiApiKey: '',
   deepseekApiKey: '',
-  geminiModel: 'gemini-2.0-flash',
+  geminiModel: 'gemini-2.5-flash',
   deepseekModel: 'deepseek-chat',
   monitoringEnabled: false,
   monitoringIntervalMinutes: 30,

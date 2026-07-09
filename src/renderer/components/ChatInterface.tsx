@@ -222,6 +222,11 @@ export default function ChatInterface({ settings }: Props): JSX.Element {
             {busy ? '…' : 'Send ➤'}
           </button>
         </div>
+        <div className="model-indicator">
+          🧠 Diagnosis: Google Gemini · <code>{settings.geminiModel}</code>
+          <span className="model-sep">|</span>
+          🛠 Fix scripts: DeepSeek · <code>{settings.deepseekModel}</code>
+        </div>
       </div>
     </div>
   );
