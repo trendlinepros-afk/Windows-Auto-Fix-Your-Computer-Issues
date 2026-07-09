@@ -22,7 +22,12 @@ import {
   LogEntry,
   UpdateInfo,
 } from '../types';
-import { generateFixForIssue, streamGeminiDiagnosis } from '../utils/apiClients';
+import {
+  generateFixForIssue,
+  listGeminiModels,
+  pickBestGeminiModel,
+  streamGeminiDiagnosis,
+} from '../utils/apiClients';
 import { collectDiagnostics, quickHealthCheck } from '../utils/diagnostics';
 import {
   executeFix,
@@ -249,12 +254,19 @@ function registerIpcHandlers(): void {
         });
 
         sendChatEvent({ type: 'status', message: 'Analyzing with AI…' });
-        const { issues } = await streamGeminiDiagnosis(
+        const { issues, usedModel } = await streamGeminiDiagnosis(
           settings,
           userMessage,
           diagnostics,
-          (text) => sendChatEvent({ type: 'chunk', text })
+          (text) => sendChatEvent({ type: 'chunk', text }),
+          (message) => sendChatEvent({ type: 'status', message })
         );
+
+        // Persist the model the client auto-switched to after a retirement,
+        // so future runs (and the Settings UI) use the working one.
+        if (usedModel !== settings.geminiModel) {
+          settingsStore.save({ ...settings, geminiModel: usedModel });
+        }
 
         if (issues.length === 0) {
           sendChatEvent({ type: 'fixes', fixes: [] });
@@ -303,6 +315,27 @@ function registerIpcHandlers(): void {
       }
     }
   );
+
+  // ---- Gemini model discovery --------------------------------------------
+  ipcMain.handle('gemini:listModels', async () => {
+    const settings = settingsStore.get();
+    if (!settings.geminiApiKey) {
+      return { ok: false as const, error: 'Add your Gemini API key first, then detect models.' };
+    }
+    try {
+      const models = await listGeminiModels(settings.geminiApiKey);
+      return {
+        ok: true as const,
+        models,
+        recommended: pickBestGeminiModel(models),
+      };
+    } catch (err) {
+      return {
+        ok: false as const,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  });
 
   // ---- Fix execution ------------------------------------------------------
   ipcMain.handle('fix:execute', async (_event, request: FixExecutionRequest) => {
