@@ -1,7 +1,7 @@
 {
   "name": "windows-troubleshooter",
   "productName": "Windows Troubleshooter",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "AI-powered Windows desktop troubleshooting app: diagnose and fix system issues through a chat interface.",
   "main": "dist/main/index.js",
   "author": "trendlinepros-afk",

@@ -121,9 +121,8 @@ app.whenReady().then(async () => {
   createTray();
   applyMonitoringSchedule(settings);
 
-  if (settings.checkUpdatesOnStartup) {
-    void startupUpdateCheck();
-  }
+  // The startup update check is initiated by the renderer (see App.tsx) via
+  // the updater:check IPC handler, so its result can't race the page load.
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
@@ -198,17 +197,6 @@ function applyMonitoringSchedule(settings: AppSettings): void {
       // Monitoring must never crash the app.
     }
   }, intervalMs);
-}
-
-// ---------------------------------------------------------------------------
-// Startup update check
-// ---------------------------------------------------------------------------
-
-async function startupUpdateCheck(): Promise<void> {
-  const info = await checkForUpdates(app.getVersion());
-  if (!info.updateAvailable || !mainWindow) return;
-  pendingUpdate = info;
-  mainWindow.webContents.send('updater:available', info);
 }
 
 // ---------------------------------------------------------------------------
