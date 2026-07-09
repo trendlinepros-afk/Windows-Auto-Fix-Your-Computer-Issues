@@ -93,6 +93,12 @@ export async function streamGeminiDiagnosis(
     body: JSON.stringify(body),
   });
 
+  if (response.status === 404) {
+    throw new Error(
+      `The Gemini model "${settings.geminiModel}" was not found — it may have been retired by Google. ` +
+        `Open Settings and update the Gemini model to a current one (e.g. "gemini-2.5-flash").`
+    );
+  }
   if (!response.ok || !response.body) {
     const detail = await response.text().catch(() => '');
     throw new Error(`Gemini API error (${response.status}): ${detail.slice(0, 300)}`);

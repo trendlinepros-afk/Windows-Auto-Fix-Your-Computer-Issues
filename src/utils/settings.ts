@@ -4,6 +4,20 @@ import { safeStorage } from 'electron';
 import { AppSettings, DEFAULT_SETTINGS } from '../types';
 
 /**
+ * Gemini models that have been retired by Google. Settings persisted with one
+ * of these are silently upgraded to the current default so existing installs
+ * keep working after a model is shut down.
+ */
+const RETIRED_GEMINI_MODELS = new Set([
+  'gemini-pro',
+  'gemini-1.0-pro',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+]);
+
+/**
  * Persists app settings to userData/settings.json.
  * API keys are encrypted at rest with Electron safeStorage (DPAPI on Windows)
  * when encryption is available; environment variables act as dev fallbacks.
@@ -47,6 +61,10 @@ export class SettingsStore {
       deepseekApiKey,
     };
     delete (this.cache as unknown as Record<string, unknown>).encryptedKeys;
+
+    if (RETIRED_GEMINI_MODELS.has(this.cache.geminiModel)) {
+      this.cache.geminiModel = DEFAULT_SETTINGS.geminiModel;
+    }
     return this.cache;
   }
 
