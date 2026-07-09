@@ -17,7 +17,16 @@ export default function App(): JSX.Element {
   const [monitorAlert, setMonitorAlert] = useState<MonitoringAlert | null>(null);
 
   useEffect(() => {
-    void window.api.settings.get().then(setSettings);
+    void window.api.settings.get().then((loaded) => {
+      setSettings(loaded);
+      // Startup update check runs from the renderer so the result can never
+      // arrive before the UI is ready to show the banner.
+      if (loaded.checkUpdatesOnStartup) {
+        void window.api.updater.check().then((info) => {
+          if (info.updateAvailable) setUpdate(info);
+        });
+      }
+    });
     void window.api.app.getInfo().then((info) => {
       setVersion(info.version);
       setIsAdmin(info.isAdmin);

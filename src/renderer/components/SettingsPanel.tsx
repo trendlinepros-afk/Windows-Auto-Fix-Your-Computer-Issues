@@ -20,6 +20,8 @@ export default function SettingsPanel({ settings, onSaved }: Props): JSX.Element
   const [showDeepseekKey, setShowDeepseekKey] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadNotice, setDownloadNotice] = useState('');
 
   const set = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     setDraft((d) => ({ ...d, [key]: value }));
@@ -47,10 +49,28 @@ export default function SettingsPanel({ settings, onSaved }: Props): JSX.Element
 
   const checkUpdates = async () => {
     setCheckingUpdate(true);
+    setDownloadNotice('');
     try {
       setUpdateInfo(await window.api.updater.check());
     } finally {
       setCheckingUpdate(false);
+    }
+  };
+
+  const downloadUpdate = async () => {
+    setDownloading(true);
+    setDownloadNotice('');
+    try {
+      const result = await window.api.updater.download();
+      if (result.ok) {
+        setDownloadNotice(
+          `Installer downloaded${result.hashVerified ? ' (checksum verified)' : ''} and launched — close this app to finish installing.`
+        );
+      } else {
+        setDownloadNotice(`Download failed: ${result.error}`);
+      }
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -196,7 +216,7 @@ export default function SettingsPanel({ settings, onSaved }: Props): JSX.Element
           Check for updates on startup (GitHub releases)
         </label>
         <div className="update-check-row">
-          <button className="btn ghost sm" onClick={checkUpdates} disabled={checkingUpdate}>
+          <button className="btn ghost sm" onClick={checkUpdates} disabled={checkingUpdate || downloading}>
             {checkingUpdate ? 'Checking…' : 'Check now'}
           </button>
           {updateInfo && (
@@ -208,7 +228,13 @@ export default function SettingsPanel({ settings, onSaved }: Props): JSX.Element
                   : `You are up to date (v${updateInfo.currentVersion}).`}
             </span>
           )}
+          {updateInfo?.updateAvailable && (
+            <button className="btn primary sm" onClick={downloadUpdate} disabled={downloading}>
+              {downloading ? 'Downloading…' : `⬇ Download & install v${updateInfo.latestVersion}`}
+            </button>
+          )}
         </div>
+        {downloadNotice && <p className="muted update-notice">{downloadNotice}</p>}
       </section>
 
       <div className="settings-footer">
